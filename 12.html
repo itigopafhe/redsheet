@@ -1,0 +1,1568 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Digital Red Sheet - Enterprise File System</title>
+    <style>
+        :root {
+            --bg-color: #ffffff;
+            --text-color: #111111;
+            --mask-color: #ff0000;
+            --panel-bg: #f8f9fa;
+            --border-color: #cccccc;
+            --folder-color: #ffc107;
+            --file-color: #007bff;
+            --active-bg: #e2e6ea;
+            --highlight-bg: #ffeb3b;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            overflow: hidden;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .app-wrapper {
+            display: flex;
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        .sidebar {
+            width: 300px;
+            height: 100%;
+            background-color: #f1f3f5;
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+            transition: transform 0.2s ease, margin-left 0.2s ease;
+            z-index: 10003;
+            flex-shrink: 0;
+        }
+
+        .sidebar.closed {
+            margin-left: -300px;
+        }
+
+        .sidebar-header {
+            padding: 15px;
+            background-color: #e9ecef;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .sidebar-title-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .sidebar-title {
+            margin: 0;
+            font-size: 14px;
+            font-weight: bold;
+            color: #495057;
+        }
+
+        .sidebar-close-inner {
+            background: none;
+            border: none;
+            font-size: 16px;
+            cursor: pointer;
+            color: #6c757d;
+            padding: 0 5px;
+        }
+
+        .search-box-container {
+            margin-bottom: 10px;
+            position: relative;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 8px 12px;
+            font-size: 13px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            box-sizing: border-box;
+            outline: none;
+        }
+
+        .search-input:focus {
+            border-color: var(--file-color);
+        }
+
+        .fs-controls {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 5px;
+        }
+
+        .fs-btn {
+            flex: 1;
+            padding: 6px;
+            font-size: 11px;
+            font-weight: bold;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background-color: #ffffff;
+            cursor: pointer;
+        }
+
+        .move-mode-indicator {
+            background-color: #fff3cd;
+            border: 1px solid #ffeeba;
+            color: #856404;
+            padding: 6px;
+            font-size: 11px;
+            border-radius: 4px;
+            margin-top: 5px;
+            display: none;
+            text-align: center;
+        }
+
+        .tree-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+
+        .tree-node {
+            margin-left: 12px;
+            user-select: none;
+        }
+
+        .node-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 4px 4px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 2px;
+        }
+
+        .node-row:hover, .node-row.active {
+            background-color: var(--active-bg);
+        }
+
+        .node-row.moving-target {
+            opacity: 0.5;
+            border: 1px dashed #ffc107;
+        }
+
+        .node-left {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 13px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+        }
+
+        .toggle-arrow {
+            width: 16px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: #6c757d;
+            cursor: pointer;
+        }
+        .toggle-arrow.empty {
+            visibility: hidden;
+        }
+
+        .icon-folder::before { content: "📁"; color: var(--folder-color); }
+        .icon-file::before { content: "📄"; color: var(--file-color); }
+
+        .node-actions {
+            display: flex;
+            gap: 2px;
+            opacity: 0;
+        }
+
+        .node-row:hover .node-actions {
+            opacity: 1;
+        }
+
+        .action-sub-btn {
+            background: none;
+            border: none;
+            font-size: 11px;
+            cursor: pointer;
+            padding: 2px 4px;
+            color: #6c757d;
+            border-radius: 2px;
+        }
+        .action-sub-btn:hover {
+            background-color: #ced4da;
+        }
+        .action-sub-btn.delete { color: #dc3545; }
+
+        .node-children {
+            display: block;
+        }
+        .node-children.collapsed {
+            display: none;
+        }
+
+        .search-result-item {
+            padding: 8px;
+            border-bottom: 1px solid #e9ecef;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        .search-result-item:hover {
+            background-color: var(--active-bg);
+        }
+        .search-result-type {
+            font-size: 10px;
+            font-weight: bold;
+            padding: 2px 4px;
+            border-radius: 3px;
+            margin-right: 5px;
+        }
+        .type-name { background-color: #e3faf2; color: #0ca678; }
+        .type-content { background-color: #fff0f6; color: #d6336c; }
+        .search-result-title {
+            font-size: 13px;
+            font-weight: bold;
+        }
+        .search-result-snippet {
+            font-size: 11px;
+            color: #666666;
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .main-workspace {
+            flex: 1;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            box-sizing: border-box;
+            background-color: var(--bg-color);
+            overflow: hidden;
+        }
+
+        .workspace-header {
+            padding: 10px 20px;
+            border-bottom: 1px solid var(--border-color);
+            background-color: #fafafa;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .menu-toggle-btn {
+            padding: 6px 12px;
+            font-size: 13px;
+            font-weight: bold;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background-color: #ffffff;
+            cursor: pointer;
+        }
+
+        .current-path {
+            font-size: 13px;
+            color: #666666;
+            font-weight: bold;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+        }
+
+        .auto-save-status {
+            font-size: 11px;
+            color: #28a745;
+            font-weight: bold;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            white-space: nowrap;
+        }
+
+        .content-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            box-sizing: border-box;
+            padding-bottom: 100px;
+        }
+
+        .editable-area {
+            width: 100%;
+            min-height: 60vh;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            box-sizing: border-box;
+            font-size: 16px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            outline: none;
+            background-color: #ffffff;
+        }
+
+        .memorize-target {
+            color: var(--mask-color);
+            font-weight: bold;
+            display: inline;
+            cursor: pointer;
+        }
+
+        body:not(.sheet-active) .memorize-target[data-status="wrong"] {
+            background-color: #ffe6e6;
+            border-bottom: 2px dashed #dc3545;
+        }
+
+        body.sheet-active .memorize-target::after {
+            content: " [" attr(data-wrong) "/" attr(data-correct) "]";
+            font-size: 11px;
+            font-weight: normal;
+            color: #0000ff;
+            margin-left: 2px;
+            display: inline-block;
+            position: relative;
+            z-index: 1001;
+        }
+
+        body.sheet-active .memorize-target.filter-strike {
+            color: #111111 !important;
+            text-decoration: line-through !important;
+        }
+
+        .search-highlight {
+            background-color: var(--highlight-bg);
+            color: #000000;
+            border-radius: 2px;
+        }
+
+        #red-sheet-handle {
+            position: fixed;
+            top: 40%;
+            left: 0;
+            width: 100%;
+            height: 28px;
+            background-color: rgba(220, 53, 69, 0.9);
+            color: #ffffff;
+            text-align: center;
+            line-height: 28px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: ns-resize;
+            pointer-events: auto;
+            touch-action: none;
+            user-select: none;
+            box-shadow: 0 -2px 8px rgba(0,0,0,0.2);
+            border-top-left-radius: 8px;
+            border-top-right-radius: 8px;
+            z-index: 10000;
+            display: none;
+            transform: translateY(-100%);
+        }
+
+        #red-sheet-overlay {
+            position: fixed;
+            top: 40%;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            background-color: var(--mask-color);
+            mix-blend-mode: multiply;
+            pointer-events: none;
+            display: none;
+            z-index: 9999;
+        }
+
+        body.sheet-active #red-sheet-handle,
+        body.sheet-active #red-sheet-overlay {
+            display: block;
+        }
+
+        body.sheet-active .memorize-target {
+            pointer-events: auto;
+            position: relative;
+            z-index: 10000;
+        }
+
+        #floating-action-btn {
+            position: fixed;
+            bottom: 120px;
+            right: 20px;
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background-color: #28a745;
+            color: #ffffff;
+            border: none;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            font-size: 12px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            z-index: 10002;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* 本文再生用右上配置型追従ボタンのスタイル定義 */
+        #audio-playback-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background-color: var(--file-color);
+            color: #ffffff;
+            border: none;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            font-size: 12px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            z-index: 10004;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        #counter-popover {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px 16px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+            z-index: 10005;
+            display: none;
+            width: 90%;
+            max-width: 320px;
+            box-sizing: border-box;
+        }
+
+        .popover-header { font-size: 13px; font-weight: bold; color: #555555; margin-bottom: 10px; text-align: center; }
+        .counter-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+        .counter-controls { display: flex; align-items: center; gap: 8px; }
+        .counter-btn { width: 32px; height: 32px; border-radius: 4px; border: 1px solid var(--border-color); background-color: #ffffff; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .counter-value { font-size: 14px; font-weight: bold; min-width: 24px; text-align: center; }
+        .popover-close-btn { width: 100%; padding: 6px; margin-top: 6px; background-color: #6c757d; color: #ffffff; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; }
+
+        .control-panel {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: var(--panel-bg);
+            border-top: 1px solid var(--border-color);
+            padding: 12px;
+            box-sizing: border-box;
+            display: flex;
+            gap: 10px;
+            z-index: 10000;
+        }
+
+        .btn-panel { flex: 1; padding: 12px; font-size: 14px; font-weight: bold; border: 1px solid var(--border-color); border-radius: 6px; background-color: #ffffff; cursor: pointer; text-align: center; }
+        #toggle-sheet-btn { background-color: #dc3545; color: #ffffff; border: none; }
+        #toggle-sheet-btn.active { background-color: #6c757d; }
+
+        #custom-modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            display: none;
+            align-items: center; justify-content: center;
+            z-index: 20000;
+        }
+        .custom-modal-box {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            width: 80%;
+            max-width: 400px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            box-sizing: border-box;
+        }
+        #custom-modal-message {
+            font-size: 14px; margin-bottom: 15px; font-weight: bold; color: #333;
+        }
+        #custom-modal-input {
+            width: 100%; padding: 8px; margin-bottom: 15px;
+            border: 1px solid var(--border-color); border-radius: 4px; box-sizing: border-box;
+            font-size: 14px;
+        }
+        .custom-modal-actions {
+            display: flex; justify-content: flex-end; gap: 10px;
+        }
+        .modal-btn {
+            padding: 8px 16px; font-size: 13px; font-weight: bold; border-radius: 4px; border: none; cursor: pointer;
+        }
+        .modal-btn.cancel { background-color: #e9ecef; color: #495057; }
+        .modal-btn.ok { background-color: var(--file-color); color: #ffffff; }
+
+        @media (max-width: 768px) {
+            .sidebar { position: absolute; left: 0; top: 0; height: 100%; transform: translateX(0); }
+            .sidebar.closed { transform: translateX(-100%); margin-left: 0; }
+            .node-actions { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-wrapper">
+    <div class="sidebar" id="app-sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-title-row">
+                <h2 class="sidebar-title">エクスプローラー</h2>
+                <button class="sidebar-close-inner" id="sidebar-close-x">✕</button>
+            </div>
+            
+            <div class="search-box-container">
+                <input type="text" class="search-input" id="global-search-input" placeholder="ファイル名・本文を検索...">
+            </div>
+
+            <div class="fs-controls">
+                <button class="fs-btn" id="new-folder-btn">📁 +フォルダ</button>
+                <button class="fs-btn" id="new-file-btn">📄 +ファイル</button>
+                <button class="fs-btn" id="move-root-btn" style="display:none;">⤶ ルートへ</button>
+            </div>
+            <div class="fs-controls">
+                <button class="fs-btn" id="export-btn">📤 保存を出力</button>
+                <button class="fs-btn" id="import-btn">📥 保存を読込</button>
+            </div>
+            <input type="file" id="import-file-input" accept=".json" style="display: none;">
+            <div class="move-mode-indicator" id="move-indicator">移動モード：対象を選択してください</div>
+        </div>
+        <div class="tree-container" id="file-tree-root"></div>
+    </div>
+
+    <div class="main-workspace">
+        <div class="workspace-header">
+            <button class="menu-toggle-btn" id="sidebar-toggle">☰ メニュー</button>
+            <div class="current-path" id="path-display">ルート / (ファイル未選択)</div>
+            
+            <select id="filter-select" class="fs-btn" style="max-width: 150px; margin-left: auto; padding: 4px; height: 32px; font-size: 11px;">
+                <option value="all">すべて隠す</option>
+                <option value="wrong-only-show">不正＞正解のみ表示</option>
+                <option value="range-hide">不正回数範囲で隠す</option>
+            </select>
+
+            <div id="filter-range-container" style="display: none; align-items: center; gap: 4px; font-size: 11px; margin-left: 5px;">
+                <input type="number" id="filter-wrong-min" value="0" min="0" style="width: 45px; padding: 4px; border: 1px solid var(--border-color); border-radius: 4px;">
+                <span>～</span>
+                <input type="number" id="filter-wrong-max" value="5" min="0" style="width: 45px; padding: 4px; border: 1px solid var(--border-color); border-radius: 4px;">
+            </div>
+
+            <div class="auto-save-status" id="auto-save-status">✓ 自動保存済</div>
+        </div>
+        
+        <div class="content-container">
+            <div id="text-buffer" class="editable-area" contenteditable="false">左側のメニューからファイルを作成、または選択してください。</div>
+        </div>
+        
+        <button id="floating-action-btn" style="display: none;">赤文字化</button>
+        
+        <button id="audio-playback-btn" style="display: none;">本文再生</button>
+        
+        <div id="counter-popover">
+            <div class="popover-header" id="popover-target-word">対象語句</div>
+            <div class="counter-row">
+                <div>苦手 (Wrong)</div>
+                <div class="counter-controls">
+                    <button class="counter-btn" id="minus-wrong">-</button>
+                    <div class="counter-value" id="val-wrong">0</div>
+                    <button class="counter-btn" id="plus-wrong">+</button>
+                </div>
+            </div>
+            <div class="counter-row">
+                <div>覚えた (Correct)</div>
+                <div class="counter-controls">
+                    <button class="counter-btn" id="minus-correct">-</button>
+                    <div class="counter-value" id="val-correct">0</div>
+                    <button class="counter-btn" id="plus-correct">+</button>
+                </div>
+            </div>
+            <button class="popover-close-btn" id="close-popover-btn">閉じる</button>
+        </div>
+
+        <div id="red-sheet-handle">≡ シートを上下にドラッグ ≡</div>
+        <div id="red-sheet-overlay"></div>
+
+        <div class="control-panel">
+            <button id="save-btn" class="btn-panel">保存</button>
+            <button id="toggle-sheet-btn" class="btn-panel">赤シート ON</button>
+        </div>
+    </div>
+</div>
+
+<div id="custom-modal-overlay">
+    <div class="custom-modal-box">
+        <div id="custom-modal-message"></div>
+        <input type="text" id="custom-modal-input">
+        <div class="custom-modal-actions">
+            <button id="custom-modal-cancel" class="modal-btn cancel">キャンセル</button>
+            <button id="custom-modal-ok" class="modal-btn ok">確定</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const sidebar = document.getElementById('app-sidebar');
+        const sidebarToggle = document.getElementById('sidebar-toggle');
+        const sidebarCloseX = document.getElementById('sidebar-close-x');
+        const fileTreeRoot = document.getElementById('file-tree-root');
+        const pathDisplay = document.getElementById('path-display');
+        const textBuffer = document.getElementById('text-buffer');
+        const autoSaveStatus = document.getElementById('auto-save-status');
+        
+        const searchInput = document.getElementById('global-search-input');
+        const newFolderBtn = document.getElementById('new-folder-btn');
+        const newFileBtn = document.getElementById('new-file-btn');
+        const moveRootBtn = document.getElementById('move-root-btn');
+        const moveIndicator = document.getElementById('move-indicator');
+        const saveBtn = document.getElementById('save-btn');
+        const toggleSheetBtn = document.getElementById('toggle-sheet-btn');
+        const floatingBtn = document.getElementById('floating-action-btn');
+        const audioPlaybackBtn = document.getElementById('audio-playback-btn');
+
+        const exportBtn = document.getElementById('export-btn');
+        const importBtn = document.getElementById('import-btn');
+        const importFileInput = document.getElementById('import-file-input');
+        const filterSelect = document.getElementById('filter-select');
+        const filterRangeContainer = document.getElementById('filter-range-container');
+        const filterWrongMin = document.getElementById('filter-wrong-min');
+        const filterWrongMax = document.getElementById('filter-wrong-max');
+        
+        const counterPopover = document.getElementById('counter-popover');
+        const popoverTitle = document.getElementById('popover-target-word');
+        const valWrong = document.getElementById('val-wrong');
+        const valCorrect = document.getElementById('val-correct');
+
+        const modalOverlay = document.getElementById('custom-modal-overlay');
+        const modalMessage = document.getElementById('custom-modal-message');
+        const modalInput = document.getElementById('custom-modal-input');
+        const modalOkBtn = document.getElementById('custom-modal-ok');
+        const modalCancelBtn = document.getElementById('custom-modal-cancel');
+
+        const sheetHandle = document.getElementById('red-sheet-handle');
+        const sheetOverlay = document.getElementById('red-sheet-overlay');
+        
+        let nodes = [];
+        let statsData = {};
+        let activeFileId = null;
+        let activeFolderId = null;
+        let movingNodeId = null;
+        let currentSearchQuery = '';
+
+        let currentRange = null;
+        let isDragging = false;
+        let startX, startY, initialX, initialY;
+        let isModeUnwrap = false;
+        let targetElementToUnwrap = null;
+        let activeTargetId = null;
+
+        let autoSaveTimeout = null;
+
+        sidebarToggle.addEventListener('click', () => sidebar.classList.toggle('closed'));
+        sidebarCloseX.addEventListener('click', () => sidebar.classList.add('closed'));
+
+        const showModal = (message, isPrompt = false, defaultValue = '') => {
+            return new Promise((resolve) => {
+                modalMessage.textContent = message;
+                modalInput.style.display = isPrompt ? 'block' : 'none';
+                modalInput.value = defaultValue;
+                modalOverlay.style.display = 'flex';
+
+                if (isPrompt) modalInput.focus();
+
+                const cleanup = () => {
+                    modalOkBtn.removeEventListener('click', onOk);
+                    modalCancelBtn.removeEventListener('click', onCancel);
+                    modalOverlay.style.display = 'none';
+                };
+
+                const onOk = () => {
+                    cleanup();
+                    resolve(isPrompt ? modalInput.value : true);
+                };
+
+                const onCancel = () => {
+                    cleanup();
+                    resolve(isPrompt ? null : false);
+                };
+
+                modalOkBtn.addEventListener('click', onOk);
+                modalCancelBtn.addEventListener('click', onCancel);
+            });
+        };
+
+        const initFileSystem = () => {
+            const savedNodes = localStorage.getItem('fs_nodes_v3');
+            const savedStats = localStorage.getItem('fs_stats_v3');
+            
+            if (savedNodes && savedStats) {
+                nodes = JSON.parse(savedNodes);
+                statsData = JSON.parse(savedStats);
+            } else {
+                nodes = [
+                    { id: 'f-1', name: '世界史', type: 'folder', parentId: null, isCollapsed: false },
+                    { id: 'f-2', name: '中国史', type: 'folder', parentId: 'f-1', isCollapsed: false },
+                    { id: 'doc-1', name: 'アヘン戦争', type: 'file', parentId: 'f-2', content: 'アヘン戦争（アヘンせんそう）は、1840年からイギリスが清に対して行った侵略戦争である。英国の東インド会社が関与した。' }
+                ];
+                statsData = {};
+                saveFileSystem();
+            }
+            renderTree();
+        };
+
+        const saveFileSystem = () => {
+            if (activeFileId) {
+                const currentFile = nodes.find(n => n.id === activeFileId);
+                if (currentFile) {
+                    let cleanHTML = textBuffer.innerHTML;
+                    cleanHTML = cleanHTML.replace(/<mark class="search-highlight">([^<]+)<\/mark>/gi, '$1');
+                    currentFile.content = cleanHTML;
+                }
+            }
+            localStorage.setItem('fs_nodes_v3', JSON.stringify(nodes));
+            localStorage.setItem('fs_stats_v3', JSON.stringify(statsData));
+        };
+
+        const showAutoSaveIndicator = () => {
+            autoSaveStatus.style.opacity = '1';
+            setTimeout(() => {
+                autoSaveStatus.style.opacity = '0';
+            }, 1500);
+        };
+
+        textBuffer.addEventListener('input', () => {
+            if (!activeFileId) return;
+            clearTimeout(autoSaveTimeout);
+            autoSaveTimeout = setTimeout(() => {
+                saveFileSystem();
+                showAutoSaveIndicator();
+            }, 1000);
+        });
+
+        saveBtn.addEventListener('click', async () => {
+            if (!activeFileId) return;
+            saveFileSystem();
+            await showModal('変更をファイルシステムに保存しました。', false);
+        });
+
+        exportBtn.addEventListener('click', () => {
+            saveFileSystem();
+            const exportPackage = {
+                nodes: nodes,
+                statsData: statsData,
+                exportedAt: new Date().toISOString()
+            };
+            const jsonString = JSON.stringify(exportPackage, null, 2);
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const downloadUrl = URL.createObjectURL(blob);
+            
+            const anchor = document.createElement('a');
+            anchor.href = downloadUrl;
+            anchor.download = `digital_red_sheet_backup_${Date.now()}.json`;
+            document.body.appendChild(anchor);
+            anchor.click();
+            document.body.removeChild(anchor);
+            URL.revokeObjectURL(downloadUrl);
+        });
+
+        importBtn.addEventListener('click', () => {
+            importFileInput.click();
+        });
+
+        importFileInput.addEventListener('change', (event) => {
+            const selectedFile = event.target.files[0];
+            if (!selectedFile) return;
+
+            const fileReader = new FileReader();
+            fileReader.onload = async (e) => {
+                try {
+                    const parsedData = JSON.parse(e.target.result);
+                    
+                    if (parsedData && Array.isArray(parsedData.nodes) && parsedData.statsData) {
+                        const isConfirmed = await showModal('データをインポートしますか？既存の階層構造および統計データは完全に上書きされます。', false);
+                        if (!isConfirmed) {
+                            event.target.value = '';
+                            return;
+                        }
+                        
+                        nodes = parsedData.nodes;
+                        statsData = parsedData.statsData;
+                        
+                        activeFileId = null;
+                        activeFolderId = null;
+                        textBuffer.setAttribute('contenteditable', 'false');
+                        textBuffer.innerHTML = '左側のメニューからファイルを作成、または選択してください。';
+                        pathDisplay.textContent = 'ルート / (ファイル未選択)';
+                        floatingBtn.style.display = 'none';
+                        audioPlaybackBtn.style.display = 'none';
+                        window.speechSynthesis.cancel();
+                        
+                        localStorage.setItem('fs_nodes_v3', JSON.stringify(nodes));
+                        localStorage.setItem('fs_stats_v3', JSON.stringify(statsData));
+                        renderTree();
+                        await showModal('データのインポートが完了しました。', false);
+                    } else {
+                        await showModal('インポートに失敗しました。ファイルの形式が無効です。', false);
+                    }
+                } catch (error) {
+                    await showModal('ファイルの解析中にエラーが発生しました。有効なJSONファイルであることを確認してください。', false);
+                }
+            };
+            fileReader.readAsText(selectedFile);
+            event.target.value = '';
+        });
+
+        const renderTree = () => {
+            fileTreeRoot.innerHTML = '';
+            
+            if (currentSearchQuery) {
+                renderSearchResults();
+                return;
+            }
+
+            const sortedRootNodes = sortNodes(nodes.filter(n => n.parentId === null));
+            sortedRootNodes.forEach(node => {
+                fileTreeRoot.appendChild(createNodeElement(node));
+            });
+        };
+
+        const sortNodes = (nodeArray) => {
+            return nodeArray.sort((a, b) => {
+                if (a.type !== b.type) {
+                    return a.type === 'folder' ? -1 : 1;
+                }
+                return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+            });
+        };
+
+        const createNodeElement = (node) => {
+            const nodeWrapper = document.createElement('div');
+            nodeWrapper.className = 'tree-node';
+            nodeWrapper.setAttribute('data-node-id', node.id);
+
+            const row = document.createElement('div');
+            row.className = `node-row ${activeFileId === node.id || activeFolderId === node.id ? 'active' : ''}`;
+            if (movingNodeId === node.id) row.classList.add('moving-target');
+            
+            const leftSection = document.createElement('div');
+            leftSection.className = 'node-left';
+
+            const arrow = document.createElement('span');
+            if (node.type === 'folder') {
+                arrow.className = 'toggle-arrow';
+                arrow.textContent = node.isCollapsed ? '▶' : '▼';
+                arrow.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    node.isCollapsed = !node.isCollapsed;
+                    saveFileSystem();
+                    renderTree();
+                });
+            } else {
+                arrow.className = 'toggle-arrow empty';
+            }
+            
+            const icon = document.createElement('span');
+            icon.className = node.type === 'folder' ? 'icon-folder' : 'icon-file';
+            
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = node.name;
+
+            leftSection.appendChild(arrow);
+            leftSection.appendChild(icon);
+            leftSection.appendChild(nameSpan);
+            row.appendChild(leftSection);
+
+            const actions = document.createElement('div');
+            actions.className = 'node-actions';
+
+            const renameBtn = document.createElement('button');
+            renameBtn.className = 'action-sub-btn';
+            renameBtn.textContent = '✎';
+            renameBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                await executeRenameNode(node.id);
+            });
+
+            const moveBtn = document.createElement('button');
+            moveBtn.className = 'action-sub-btn';
+            moveBtn.textContent = '➔';
+            moveBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                startMoveMode(node.id);
+            });
+
+            const delBtn = document.createElement('button');
+            delBtn.className = 'action-sub-btn delete';
+            delBtn.textContent = '×';
+            delBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                await executeDeleteNode(node.id);
+            });
+
+            actions.appendChild(renameBtn);
+            actions.appendChild(moveBtn);
+            actions.appendChild(delBtn);
+            row.appendChild(actions);
+
+            if (node.type === 'folder') {
+                const childrenContainer = document.createElement('div');
+                childrenContainer.className = 'node-children';
+                if (node.isCollapsed) childrenContainer.classList.add('collapsed');
+                
+                const sortedChildren = sortNodes(nodes.filter(n => n.parentId === node.id));
+                sortedChildren.forEach(child => {
+                    childrenContainer.appendChild(createNodeElement(child));
+                });
+                nodeWrapper.appendChild(row);
+                nodeWrapper.appendChild(childrenContainer);
+            } else {
+                nodeWrapper.appendChild(row);
+            }
+
+            row.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (movingNodeId) {
+                    if (node.type === 'folder') executeMoveNode(movingNodeId, node.id);
+                    return;
+                }
+
+                if (node.type === 'folder') {
+                    activeFolderId = node.id;
+                    activeFileId = null;
+                } else {
+                    if (activeFileId) saveFileSystem();
+                    activeFileId = node.id;
+                    activeFolderId = nodes.find(n => n.id === node.id).parentId;
+                    loadFileData(node);
+                }
+                renderTree();
+            });
+
+            return nodeWrapper;
+        };
+
+        const renderSearchResults = () => {
+            const query = currentSearchQuery.toLowerCase();
+            const resultsContainer = document.createElement('div');
+            
+            nodes.forEach(node => {
+                if (node.type === 'folder') {
+                    if (node.name.toLowerCase().includes(query)) {
+                        resultsContainer.appendChild(createSearchResultDOM(node, 'type-name', 'フォルダ名マッチ', node.name));
+                    }
+                } else {
+                    if (node.name.toLowerCase().includes(query)) {
+                        resultsContainer.appendChild(createSearchResultDOM(node, 'type-name', 'ファイル名マッチ', node.name));
+                    }
+                    if (node.content) {
+                        const plainText = node.content.replace(/<[^>]+>/g, '');
+                        if (plainText.toLowerCase().includes(query)) {
+                            const index = plainText.toLowerCase().indexOf(query);
+                            const start = Math.max(0, index - 20);
+                            const snippet = plainText.substring(start, start + 50);
+                            resultsContainer.appendChild(createSearchResultDOM(node, 'type-content', '本文マッチ', node.name, `...${snippet}...`));
+                        }
+                    }
+                }
+            });
+
+            if (resultsContainer.children.length === 0) {
+                const noResult = document.createElement('div');
+                noResult.style.cssText = 'padding:15px; font-size:12px; color:#888; text-align:center;';
+                noResult.textContent = '該当する項目が見つかりません。';
+                fileTreeRoot.appendChild(noResult);
+            } else {
+                fileTreeRoot.appendChild(resultsContainer);
+            }
+        };
+
+        const createSearchResultDOM = (node, badgeClass, badgeText, title, snippet = '') => {
+            const item = document.createElement('div');
+            item.className = 'search-result-item';
+            
+            const header = document.createElement('div');
+            header.style.display = 'flex';
+            header.style.alignItems = 'center';
+            
+            const badge = document.createElement('span');
+            badge.className = `search-result-type ${badgeClass}`;
+            badge.textContent = badgeText;
+            
+            const titleSpan = document.createElement('span');
+            titleSpan.className = 'search-result-title';
+            titleSpan.textContent = title;
+            
+            header.appendChild(badge);
+            header.appendChild(titleSpan);
+            item.appendChild(header);
+            
+            if (snippet) {
+                const snippetDiv = document.createElement('div');
+                snippetDiv.className = 'search-result-snippet';
+                snippetDiv.textContent = snippet;
+                item.appendChild(snippetDiv);
+            }
+
+            item.addEventListener('click', () => {
+                if (node.type === 'folder') {
+                    let current = node;
+                    while (current) {
+                        current.isCollapsed = false;
+                        current = nodes.find(n => n.id === current.parentId);
+                    }
+                    activeFolderId = node.id;
+                    activeFileId = null;
+                    searchInput.value = '';
+                    currentSearchQuery = '';
+                    renderTree();
+                } else {
+                    if (activeFileId) saveFileSystem();
+                    activeFileId = node.id;
+                    activeFolderId = node.parentId;
+                    loadFileData(node, currentSearchQuery);
+                    renderTree();
+                }
+                if (window.innerWidth <= 768) sidebar.classList.remove('open');
+            });
+
+            return item;
+        };
+
+        searchInput.addEventListener('input', (e) => {
+            currentSearchQuery = e.target.value.trim();
+            renderTree();
+        });
+
+        const loadFileData = (fileNode, highlightKeyword = '') => {
+            const isSheetActive = document.body.classList.contains('sheet-active');
+            textBuffer.setAttribute('contenteditable', isSheetActive ? 'false' : 'true');
+            let baseContent = fileNode.content || '';
+            
+            baseContent = baseContent.replace(/<mark class="search-highlight">([^<]+)<\/mark>/gi, '$1');
+
+            if (highlightKeyword) {
+                const escapedKeyword = highlightKeyword.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+                const regex = new RegExp(`(${escapedKeyword})`, 'gi');
+                baseContent = baseContent.replace(regex, '<mark class="search-highlight">$1</mark>');
+            }
+
+            textBuffer.innerHTML = baseContent;
+            pathDisplay.textContent = `編集中のパス: ${buildPathString(fileNode.id)}`;
+            floatingBtn.style.display = isSheetActive ? 'none' : 'flex';
+            audioPlaybackBtn.style.display = 'flex';
+            window.speechSynthesis.cancel();
+            resetAudioButtonState();
+
+            const targets = textBuffer.querySelectorAll('.memorize-target');
+            targets.forEach(el => {
+                const id = el.getAttribute('data-id');
+                if (id && statsData[id]) {
+                    el.setAttribute('data-wrong', statsData[id].wrong);
+                    el.setAttribute('data-correct', statsData[id].correct);
+                }
+            });
+
+            applyFilter();
+
+            if (highlightKeyword) {
+                setTimeout(() => {
+                    const firstHighlight = textBuffer.querySelector('.search-highlight');
+                    if (firstHighlight) {
+                        firstHighlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }, 100);
+            }
+        };
+
+        const buildPathString = (nodeId) => {
+            let current = nodes.find(n => n.id === nodeId);
+            let path = [];
+            while (current) {
+                path.unshift(current.name);
+                current = nodes.find(n => n.id === current.parentId);
+            }
+            return path.join(' / ');
+        };
+
+        const executeRenameNode = async (id) => {
+            const target = nodes.find(n => n.id === id);
+            if (!target) return;
+            const newName = await showModal('新しい名前を入力してください:', true, target.name);
+            if (!newName || newName.trim() === '') return;
+            target.name = newName.trim();
+            saveFileSystem();
+            renderTree();
+            if (activeFileId === id) pathDisplay.textContent = `編集中のパス: ${buildPathString(id)}`;
+        };
+
+        const startMoveMode = (id) => {
+            movingNodeId = id;
+            moveIndicator.style.display = 'block';
+            moveRootBtn.style.display = 'inline-block';
+            renderTree();
+        };
+
+        const endMoveMode = () => {
+            movingNodeId = null;
+            moveIndicator.style.display = 'none';
+            moveRootBtn.style.display = 'none';
+            renderTree();
+        };
+
+        const executeMoveNode = async (sourceId, targetParentId) => {
+            if (sourceId === targetParentId) {
+                await showModal('自分自身の中には移動できません。', false);
+                endMoveMode();
+                return;
+            }
+            const isDescendant = (parentCheckId, childCheckId) => {
+                let current = nodes.find(n => n.id === parentCheckId);
+                while (current) {
+                    if (current.parentId === childCheckId) return true;
+                    current = nodes.find(n => n.id === current.parentId);
+                }
+                return false;
+            };
+            if (isDescendant(targetParentId, sourceId)) {
+                await showModal('自身の下位階層へは移動できません。', false);
+                endMoveMode();
+                return;
+            }
+            const sourceNode = nodes.find(n => n.id === sourceId);
+            if (sourceNode) {
+                sourceNode.parentId = targetParentId;
+                saveFileSystem();
+                if (activeFileId === sourceId) pathDisplay.textContent = `編集中のパス: ${buildPathString(sourceId)}`;
+            }
+            endMoveMode();
+        };
+
+        moveRootBtn.addEventListener('click', () => {
+            if (movingNodeId) executeMoveNode(movingNodeId, null);
+        });
+
+        newFolderBtn.addEventListener('click', async () => {
+            const name = await showModal('新規フォルダ名を入力してください:', true);
+            if (!name || name.trim() === '') return;
+            const id = 'f-' + Date.now();
+            nodes.push({ id: id, name: name.trim(), type: 'folder', parentId: activeFolderId || null, isCollapsed: false });
+            saveFileSystem();
+            renderTree();
+        });
+
+        newFileBtn.addEventListener('click', async () => {
+            const name = await showModal('新規暗記ファイル名を入力してください:', true);
+            if (!name || name.trim() === '') return;
+            const id = 'doc-' + Date.now();
+            nodes.push({ id: id, name: name.trim(), type: 'file', parentId: activeFolderId || null, content: '新規テキストを入力...' });
+            saveFileSystem();
+            renderTree();
+        });
+
+        const executeDeleteNode = async (id) => {
+            const confirmed = await showModal('この要素、および内包されるすべての子要素を削除しますか？', false);
+            if (!confirmed) return;
+            const identifyChildren = (targetId) => {
+                let toDelete = [targetId];
+                const sub = nodes.filter(n => n.parentId === targetId);
+                sub.forEach(s => {
+                    toDelete = toDelete.concat(identifyChildren(s.id));
+                });
+                return toDelete;
+            };
+
+            const idsToDelete = identifyChildren(id);
+            nodes = nodes.filter(n => !idsToDelete.includes(n.id));
+
+            if (idsToDelete.includes(activeFileId)) {
+                activeFileId = null;
+                textBuffer.setAttribute('contenteditable', 'false');
+                textBuffer.innerHTML = 'ファイルが削除されました。別のファイルを選択してください。';
+                pathDisplay.textContent = 'ルート / (ファイル未選択)';
+                floatingBtn.style.display = 'none';
+                audioPlaybackBtn.style.display = 'none';
+                window.speechSynthesis.cancel();
+            }
+            saveFileSystem();
+            renderTree();
+        };
+
+        document.addEventListener('selectionchange', () => {
+            if (document.body.classList.contains('sheet-active') || !activeFileId) return;
+            const selection = window.getSelection();
+            if (selection.rangeCount === 0) return;
+            const range = selection.getRangeAt(0);
+            if (!textBuffer.contains(range.commonAncestorContainer)) return;
+
+            let container = range.commonAncestorContainer;
+            if (container.nodeType === Node.TEXT_NODE) container = container.parentElement;
+            const targetSpan = container.closest('.memorize-target');
+
+            if (targetSpan) {
+                isModeUnwrap = true;
+                targetElementToUnwrap = targetSpan;
+                floatingBtn.textContent = '解除';
+                floatingBtn.style.backgroundColor = '#dc3545';
+                currentRange = null;
+            } else if (!selection.isCollapsed) {
+                isModeUnwrap = false;
+                targetElementToUnwrap = null;
+                floatingBtn.textContent = '赤文字化';
+                floatingBtn.style.backgroundColor = '#28a745';
+                currentRange = range.cloneRange();
+            }
+        });
+
+        // 赤文字化ボタンのドラッグ定義
+        floatingBtn.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            isDragging = false;
+            startX = e.clientX; startY = e.clientY;
+            const rect = floatingBtn.getBoundingClientRect();
+            initialX = rect.left; initialY = rect.top;
+            floatingBtn.setPointerCapture(e.pointerId);
+        });
+
+        floatingBtn.addEventListener('pointermove', (e) => {
+            if (!floatingBtn.hasPointerCapture(e.pointerId)) return;
+            const dx = e.clientX - startX; const dy = e.clientY - startY;
+            if (Math.abs(dx) > 5 || Math.abs(dy) > 5) isDragging = true;
+            if (isDragging) {
+                const newLeft = initialX + dx; const newTop = initialY + dy;
+                const maxLeft = window.innerWidth - floatingBtn.offsetWidth;
+                const maxTop = window.innerHeight - floatingBtn.offsetHeight;
+                floatingBtn.style.left = `${Math.max(0, Math.min(newLeft, maxLeft))}px`;
+                floatingBtn.style.top = `${Math.max(0, Math.min(newTop, maxTop))}px`;
+                floatingBtn.style.bottom = 'auto'; floatingBtn.style.right = 'auto';
+            }
+        });
+
+        floatingBtn.addEventListener('pointerup', (e) => {
+            if (!floatingBtn.hasPointerCapture(e.pointerId)) return;
+            floatingBtn.releasePointerCapture(e.pointerId);
+            if (!isDragging) {
+                isModeUnwrap ? executeUnwrap() : executeWrap();
+            }
+            isDragging = false;
+        });
+
+        // 再生ボタンの全方向ドラッグおよび位置追従定義
+        let isAudioDragging = false;
+        let audioStartX, audioStartY, audioInitialX, audioInitialY;
+
+        audioPlaybackBtn.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            isAudioDragging = false;
+            audioStartX = e.clientX; audioStartY = e.clientY;
+            const rect = audioPlaybackBtn.getBoundingClientRect();
+            audioInitialX = rect.left; audioInitialY = rect.top;
+            audioPlaybackBtn.setPointerCapture(e.pointerId);
+        });
+
+        audioPlaybackBtn.addEventListener('pointermove', (e) => {
+            if (!audioPlaybackBtn.hasPointerCapture(e.pointerId)) return;
+            const dx = e.clientX - audioStartX; const dy = e.clientY - audioStartY;
+            if (Math.abs(dx) > 5 || Math.abs(dy) > 5) isAudioDragging = true;
+            if (isAudioDragging) {
+                const newLeft = audioInitialX + dx; const newTop = audioInitialY + dy;
+                const maxLeft = window.innerWidth - audioPlaybackBtn.offsetWidth;
+                const maxTop = window.innerHeight - audioPlaybackBtn.offsetHeight;
+                audioPlaybackBtn.style.left = `${Math.max(0, Math.min(newLeft, maxLeft))}px`;
+                audioPlaybackBtn.style.top = `${Math.max(0, Math.min(newTop, maxTop))}px`;
+                audioPlaybackBtn.style.bottom = 'auto'; audioPlaybackBtn.style.right = 'auto';
+            }
+        });
+
+        audioPlaybackBtn.addEventListener('pointerup', (e) => {
+            if (!audioPlaybackBtn.hasPointerCapture(e.pointerId)) return;
+            audioPlaybackBtn.releasePointerCapture(e.pointerId);
+            if (!isAudioDragging) {
+                executeAudioPlayback();
+            }
+            isAudioDragging = false;
+        });
+
+        const executeAudioPlayback = () => {
+            if (window.speechSynthesis.speaking) {
+                window.speechSynthesis.cancel();
+                resetAudioButtonState();
+                return;
+            }
+
+            const textToSpeak = textBuffer.textContent;
+            if (!textToSpeak || textToSpeak.trim() === '') return;
+
+            const utterance = new SpeechSynthesisUtterance(textToSpeak);
+            utterance.lang = 'ja-JP';
+
+            utterance.onend = () => {
+                resetAudioButtonState();
+            };
+
+            utterance.onerror = () => {
+                resetAudioButtonState();
+            };
+
+            audioPlaybackBtn.textContent = '停止';
+            audioPlaybackBtn.style.backgroundColor = '#dc3545';
+            window.speechSynthesis.speak(utterance);
+        };
+
+        const resetAudioButtonState = () => {
+            audioPlaybackBtn.textContent = '本文再生';
+            audioPlaybackBtn.style.backgroundColor = 'var(--file-color)';
+        };
+
+        // 赤シートハンドルのドラッグ定義
+        let isSheetDragging = false;
+        let sheetStartY = 0;
+        let sheetInitialTop = 0;
+
+        sheetHandle.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            isSheetDragging = true;
+            sheetStartY = e.clientY;
+            const currentTop = parseFloat(getComputedStyle(sheetOverlay).top) || (window.innerHeight / 2.5);
+            sheetInitialTop = currentTop;
+            sheetHandle.setPointerCapture(e.pointerId);
+        });
+
+        sheetHandle.addEventListener('pointermove', (e) => {
+            if (!isSheetDragging) return;
+            const dy = e.clientY - sheetStartY;
+            let newTop = sheetInitialTop + dy;
+            const maxTop = window.innerHeight - 50;
+            newTop = Math.max(28, Math.min(newTop, maxTop));
+            sheetOverlay.style.top = `${newTop}px`;
+            sheetHandle.style.top = `${newTop}px`;
+        });
+
+        sheetHandle.addEventListener('pointerup', (e) => {
+            if (!isSheetDragging) return;
+            isSheetDragging = false;
+            sheetHandle.releasePointerCapture(e.pointerId);
+        });
+
+        const executeWrap = () => {
+            if (!currentRange) return;
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(currentRange);
+
+            const span = document.createElement('span');
+            span.className = 'memorize-target';
+            const uniqueId = 'id-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+            span.setAttribute('data-id', uniqueId);
+            span.setAttribute('data-status', 'none');
+            span.setAttribute('data-wrong', 0);
+            span.setAttribute('data-correct', 0);
+
+            statsData[uniqueId] = { wrong: 0, correct: 0 };
+
+            try {
+                currentRange.surroundContents(span);
+            } catch (error) {
+                const extractedContent = currentRange.extractContents();
+                span.appendChild(extractedContent);
+                currentRange.insertNode(span);
+            }
+            selection.removeAllRanges();
+            currentRange = null;
+            saveFileSystem();
+        };
+
+        const executeUnwrap = () => {
+            if (!targetElementToUnwrap) return;
+            const parent = targetElementToUnwrap.parentNode;
+            const id = targetElementToUnwrap.getAttribute('data-id');
+            if (id && statsData[id]) delete statsData[id];
+
+            while (targetElementToUnwrap.firstChild) {
+                parent.insertBefore(targetElementToUnwrap.firstChild, targetElementToUnwrap);
+            }
+            parent.removeChild(targetElementToUnwrap);
+            targetElementToUnwrap = null;
+            isModeUnwrap = false;
+            floatingBtn.textContent = '赤文字化';
+            floatingBtn.style.backgroundColor = '#28a745';
+            window.getSelection().removeAllRanges();
+            saveFileSystem();
+        };
+
+        toggleSheetBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const isActive = document.body.classList.toggle('sheet-active');
+            window.speechSynthesis.cancel();
+            resetAudioButtonState();
+            if (isActive) {
+                toggleSheetBtn.textContent = '赤シート OFF';
+                toggleSheetBtn.classList.add('active');
+                floatingBtn.style.display = 'none';
+                textBuffer.setAttribute('contenteditable', 'false');
+                document.activeElement.blur();
+            } else {
+                toggleSheetBtn.textContent = '赤シート ON';
+                toggleSheetBtn.classList.remove('active');
+                if(activeFileId) textBuffer.setAttribute('contenteditable', 'true');
+                if(activeFileId) floatingBtn.style.display = 'flex';
+                counterPopover.style.display = 'none';
+                activeTargetId = null;
+            }
+        });
+
+        // フィルターイベントの監視登録
+        filterSelect.addEventListener('change', () => {
+            applyFilter();
+        });
+        filterWrongMin.addEventListener('input', () => {
+            applyFilter();
+        });
+        filterWrongMax.addEventListener('input', () => {
+            applyFilter();
+        });
+
+        // 改修されたコアフィルターロジック
+        const applyFilter = () => {
+            const filterMode = filterSelect.value;
+            
+            if (filterMode === 'range-hide') {
+                filterRangeContainer.style.display = 'flex';
+            } else {
+                filterRangeContainer.style.display = 'none';
+            }
+
+            const minVal = parseInt(filterWrongMin.value, 10) || 0;
+            const maxVal = parseInt(filterWrongMax.value, 10) || 0;
+
+            const targets = textBuffer.querySelectorAll('.memorize-target');
+            targets.forEach(el => {
+                const id = el.getAttribute('data-id');
+                if (!id || !statsData[id]) return;
+                
+                const wrongCount = statsData[id].wrong;
+                const correctCount = statsData[id].correct;
+                let shouldStrike = false; // true = 隠さず透過描画（黒文字化）, false = 赤シートによる不透明隠蔽（赤文字維持）
+
+                if (filterMode === 'all') {
+                    shouldStrike = false;
+                } else if (filterMode === 'wrong-only-show') {
+                    // 不正回数が正解数を上回っている単語のみ透過表示（隠さない）
+                    if (wrongCount > correctCount) {
+                        shouldStrike = true;
+                    } else {
+                        shouldStrike = false;
+                    }
+                } else if (filterMode === 'range-hide') {
+                    // 不正回数の範囲を選択して、該当する文字のみ隠す（条件合致を遮蔽、範囲外を透過）
+                    if (wrongCount >= minVal && wrongCount <= maxVal) {
+                        shouldStrike = false;
+                    } else {
+                        shouldStrike = true;
+                    }
+                }
+
+                if (shouldStrike) {
+                    el.classList.add('filter-strike');
+                } else {
+                    el.classList.remove('filter-strike');
+                }
+            });
+        };
+
+        textBuffer.addEventListener('click', (e) => {
+            if (!document.body.classList.contains('sheet-active')) return;
+            const targetSpan = e.target.closest('.memorize-target');
+            if (!targetSpan) return;
+
+            document.activeElement.blur(); // モバイル仮想キーボード干渉排除
+
+            activeTargetId = targetSpan.getAttribute('data-id');
+            if (!activeTargetId || !statsData[activeTargetId]) return;
+
+            popoverTitle.textContent = `対象語句: ${targetSpan.textContent}`;
+            updatePopoverDisplay();
+            counterPopover.style.display = 'block';
+        });
+
+        const updatePopoverDisplay = () => {
+            if (!activeTargetId || !statsData[activeTargetId]) return;
+            valWrong.textContent = statsData[activeTargetId].wrong;
+            valCorrect.textContent = statsData[activeTargetId].correct;
+        };
+
+        const updateTargetElementDOM = (id) => {
+            const element = textBuffer.querySelector(`[data-id="${id}"]`);
+            if (!element || !statsData[id]) return;
+
+            const wrongCount = statsData[id].wrong;
+            element.setAttribute('data-wrong', wrongCount);
+            element.setAttribute('data-correct', statsData[id].correct);
+            element.setAttribute('data-status', wrongCount > 0 ? 'wrong' : 'none');
+            
+            applyFilter();
+            saveFileSystem();
+        };
+
+        document.getElementById('plus-wrong').addEventListener('click', () => {
+            if (!activeTargetId) return; statsData[activeTargetId].wrong += 1;
+            updatePopoverDisplay(); updateTargetElementDOM(activeTargetId);
+        });
+        document.getElementById('minus-wrong').addEventListener('click', () => {
+            if (!activeTargetId) return;
+            if (statsData[activeTargetId].wrong > 0) {
+                statsData[activeTargetId].wrong -= 1;
+                updatePopoverDisplay(); updateTargetElementDOM(activeTargetId);
+            }
+        });
+        document.getElementById('plus-correct').addEventListener('click', () => {
+            if (!activeTargetId) return; statsData[activeTargetId].correct += 1;
+            updatePopoverDisplay(); updateTargetElementDOM(activeTargetId);
+        });
+        document.getElementById('minus-correct').addEventListener('click', () => {
+            if (!activeTargetId) return;
+            if (statsData[activeTargetId].correct > 0) {
+                statsData[activeTargetId].correct -= 1;
+                updatePopoverDisplay(); updateTargetElementDOM(activeTargetId);
+            }
+        });
+        document.getElementById('close-popover-btn').addEventListener('click', () => {
+            counterPopover.style.display = 'none'; activeTargetId = null;
+        });
+
+        initFileSystem();
+    });
+</script>
+</body>
+</html>
